@@ -334,6 +334,18 @@
       margin-bottom: 3rem;
     }
 
+    .realtime-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.8rem;
+      color: var(--primary-dark);
+      background-color: var(--primary-light);
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      font-weight: 600;
+    }
+
     /* 댓글 입력 폼 */
     .comment-form {
       display: flex;
@@ -388,6 +400,11 @@
 
     .submit-btn {
       align-self: flex-end;
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
 
     /* 댓글 목록 */
@@ -658,13 +675,14 @@
       </div>
     </section>
 
-    <!-- 3. 방문자 댓글(방명록) 섹션 -->
+    <!-- 3. 방문자 댓글(방명록) 섹션 (Firebase Firestore 연동) -->
     <section class="comments-section">
       <div class="section-header">
         <h2 class="section-title">
           방문자 한마디
           <span class="count-badge" id="commentCount">0</span>
         </h2>
+        <span class="realtime-indicator" id="realtimeBadge">⚡ 실시간 동기화</span>
       </div>
 
       <!-- 댓글 작성 폼 -->
@@ -688,8 +706,8 @@
           required
         ></textarea>
         <div class="form-bottom">
-          <span class="form-tip">💡 브라우저에 안전하게 저장되어 언제든 확인할 수 있습니다.</span>
-          <button type="submit" class="btn btn-primary submit-btn">
+          <span class="form-tip">☁️ Firebase 클라우드에 실시간 저장되어 누구나 볼 수 있습니다.</span>
+          <button type="submit" class="btn btn-primary submit-btn" id="submitBtn">
             ✏️ 댓글 남기기
           </button>
         </div>
@@ -697,7 +715,7 @@
 
       <!-- 댓글 목록 영역 -->
       <div class="comments-list" id="commentsList">
-        <!-- 자바스크립트로 댓글이 렌더링됩니다 -->
+        <div class="empty-comments">댓글을 불러오는 중입니다... ⏳</div>
       </div>
     </section>
 
@@ -710,9 +728,9 @@
   <!-- 토스트 알림 메시지 요소 -->
   <div class="toast" id="toast"></div>
 
-  <!-- 4. 내부 JavaScript (외부 라이브러리 없이 독립 동작) -->
+  <!-- 4. 일반 인터랙션 자바스크립트 -->
   <script>
-    // [1] 인사말 토스트 메시지 기능
+    // 인사말 토스트 메시지
     const greetBtn = document.getElementById('greetBtn');
     const greetings = [
       "반가워요! 오늘도 기분 좋은 하루 보내세요 ✨",
@@ -726,7 +744,7 @@
       greetIndex = (greetIndex + 1) % greetings.length;
     });
 
-    // [2] 링크 복사 기능 (file:// 로컬 및 https:// 환경 모두 완벽 대응)
+    // 링크 복사
     const shareBtn = document.getElementById('shareBtn');
     shareBtn.addEventListener('click', () => {
       const url = window.location.href;
@@ -753,7 +771,7 @@
       }
     }
 
-    // [3] 카드 좋아요(공감) 버튼 토글 기능
+    // 카드 공감(하트) 토글
     function toggleLike(btn) {
       const heart = btn.querySelector('.heart');
       const countEl = btn.querySelector('.like-count');
@@ -771,7 +789,7 @@
       }
     }
 
-    // [4] 토스트 알림 표시 함수
+    // 토스트 팝업 함수
     let toastTimeout;
     function showToast(message) {
       const toast = document.getElementById('toast');
@@ -784,108 +802,139 @@
       }, 2500);
     }
 
-    // [5] 댓글(방명록) 기능 - localStorage 연동으로 영구 보존
-    const STORAGE_KEY = 'user_portfolio_guestbook_comments';
-    
-    // 기본 초기 샘플 댓글
-    const initialComments = [
-      {
-        id: 'sample-1',
-        author: '초록이',
-        content: '페이지 디자인이 초록초록해서 너무 깔끔하고 읽기 편해요! 반갑습니다 🌿',
-        date: '2026.10.20 15:40'
-      },
-      {
-        id: 'sample-2',
-        author: 'AI탐험가',
-        content: '인공지능과 자동화에 관심이 많으시군요! 멋진 프로젝트 많이 만드시길 응원합니다 🚀',
-        date: '2026.10.20 15:55'
-      }
-    ];
-
-    // 저장소에서 댓글 읽어오기
-    function getStoredComments() {
-      try {
-        const data = localStorage.getItem(STORAGE_KEY);
-        if (!data) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(initialComments));
-          return initialComments;
-        }
-        return JSON.parse(data);
-      } catch (e) {
-        return initialComments;
-      }
-    }
-
-    // 저장소에 댓글 저장하기
-    function saveComments(comments) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(comments));
-      } catch (e) {
-        console.error('댓글 저장 실패', e);
-      }
-    }
-
-    // 댓글 목록 렌더링
-    function renderComments() {
-      const comments = getStoredComments();
-      const listEl = document.getElementById('commentsList');
-      const countEl = document.getElementById('commentCount');
-      
-      countEl.textContent = comments.length;
-
-      if (comments.length === 0) {
-        listEl.innerHTML = `
-          <div class="empty-comments">
-            아직 작성된 댓글이 없습니다. 첫 번째 한마디를 남겨보세요! ✍️
-          </div>
-        `;
-        return;
-      }
-
-      listEl.innerHTML = comments.map(comment => `
-        <div class="comment-item" id="comment-${comment.id}">
-          <div class="comment-header">
-            <div class="comment-author-info">
-              <div class="author-avatar">${escapeHtml(comment.author.charAt(0))}</div>
-              <div>
-                <span class="comment-author">${escapeHtml(comment.author)}</span>
-                <span class="comment-date" style="margin-left: 8px;">${escapeHtml(comment.date)}</span>
-              </div>
-            </div>
-            <button class="comment-delete-btn" onclick="deleteComment('${comment.id}')" title="댓글 삭제" type="button">
-              삭제
-            </button>
-          </div>
-          <div class="comment-body">${escapeHtml(comment.content)}</div>
-        </div>
-      `).join('');
-    }
-
     // HTML 특수문자 이스케이프 (XSS 방지)
     function escapeHtml(text) {
       const div = document.createElement('div');
-      div.textContent = text;
+      div.textContent = text || '';
       return div.innerHTML;
     }
+  </script>
 
-    // 날짜 포맷 함수 (YYYY.MM.DD HH:mm)
-    function getFormattedDate() {
-      const now = new Date();
-      const yyyy = now.getFullYear();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const hh = String(now.getHours()).padStart(2, '0');
-      const min = String(now.getMinutes()).padStart(2, '0');
+  <!-- 5. 🔥 Firebase SDK 모듈 (단일 HTML 파일 내 완결 동작, 외부 프로그램 설치 없음) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { 
+      getFirestore, 
+      collection, 
+      addDoc, 
+      onSnapshot, 
+      query, 
+      orderBy, 
+      serverTimestamp, 
+      deleteDoc, 
+      doc 
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    // 🔑 사용자님의 Firebase 프로젝트 설정
+    const firebaseConfig = {
+      apiKey: "AIzaSyDCI6nxQ1qF_y-pn7KQnYvjvFU474HzOvs",
+      authDomain: "my-portfolio-8330f.firebaseapp.com",
+      projectId: "my-portfolio-8330f",
+      storageBucket: "my-portfolio-8330f.firebasestorage.app",
+      messagingSenderId: "779847404888",
+      appId: "1:779847404888:web:d84ef4904e2a76d8b6292d",
+      measurementId: "G-D76ES78YKN"
+    };
+
+    // Firebase 초기화
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const commentsCol = collection(db, "guestbook");
+
+    const commentsListEl = document.getElementById("commentsList");
+    const commentCountEl = document.getElementById("commentCount");
+    const commentForm = document.getElementById("commentForm");
+    const authorInput = document.getElementById("authorInput");
+    const contentInput = document.getElementById("contentInput");
+    const submitBtn = document.getElementById("submitBtn");
+
+    // 날짜 포맷 함수
+    function formatDate(timestamp) {
+      if (!timestamp) return "방금 전";
+      const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      const hh = String(d.getHours()).padStart(2, "0");
+      const min = String(d.getMinutes()).padStart(2, "0");
       return `${yyyy}.${mm}.${dd} ${hh}:${min}`;
     }
 
-    // 새 댓글 제출 이벤트
-    const commentForm = document.getElementById('commentForm');
-    const authorInput = document.getElementById('authorInput');
-    const contentInput = document.getElementById('contentInput');
+    // [1] 실시간 댓글 구독 (onSnapshot): 누군가 댓글을 쓰면 즉시 모든 방문자 화면에 반영
+    try {
+      const q = query(commentsCol, orderBy("createdAt", "desc"));
+      onSnapshot(q, (snapshot) => {
+        commentCountEl.textContent = snapshot.size;
 
-    commentForm.addEventListener('submit', (e) => {
+        if (snapshot.empty) {
+          commentsListEl.innerHTML = `
+            <div class="empty-comments">
+              아직 작성된 댓글이 없습니다. 첫 번째 한마디를 남겨보세요! ✍️
+            </div>
+          `;
+          return;
+        }
+
+        commentsListEl.innerHTML = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          const docId = docSnap.id;
+          const author = escapeHtml(data.author || "익명");
+          const content = escapeHtml(data.content || "");
+          const dateStr = formatDate(data.createdAt);
+          const firstChar = author.charAt(0) || "💬";
+
+          return `
+            <div class="comment-item" id="comment-${docId}">
+              <div class="comment-header">
+                <div class="comment-author-info">
+                  <div class="author-avatar">${firstChar}</div>
+                  <div>
+                    <span class="comment-author">${author}</span>
+                    <span class="comment-date" style="margin-left: 8px;">${dateStr}</span>
+                  </div>
+                </div>
+                <button class="comment-delete-btn" data-id="${docId}" title="댓글 삭제" type="button">
+                  삭제
+                </button>
+              </div>
+              <div class="comment-body">${content}</div>
+            </div>
+          `;
+        }).join("");
+
+        // 삭제 버튼 이벤트 연결
+        document.querySelectorAll(".comment-delete-btn").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const id = btn.getAttribute("data-id");
+            if (confirm("이 댓글을 삭제하시겠습니까?")) {
+              try {
+                await deleteDoc(doc(db, "guestbook", id));
+                showToast("댓글이 삭제되었습니다.");
+              } catch (err) {
+                console.error(err);
+                showToast("삭제 실패: Firestore 규칙을 확인해주세요.");
+              }
+            }
+          });
+        });
+
+      }, (error) => {
+        console.error("Firestore 실시간 수신 오류:", error);
+        commentsListEl.innerHTML = `
+          <div class="empty-comments" style="color: #ef4444;">
+            ⚠️ Firebase 데이터베이스 연결 대기 중입니다.<br>
+            <span style="font-size: 0.85rem; color: #6b7280;">
+              Firebase 콘솔에서 <strong>Firestore Database</strong>를 생성해주세요!
+            </span>
+          </div>
+        `;
+      });
+    } catch (e) {
+      console.error(e);
+    }
+
+    // [2] 새 댓글 작성 (Firebase Firestore에 저장)
+    commentForm.addEventListener("submit", async (e) => {
       e.preventDefault();
 
       const author = authorInput.value.trim();
@@ -896,36 +945,26 @@
         return;
       }
 
-      const newComment = {
-        id: 'comment-' + Date.now(),
-        author: author,
-        content: content,
-        date: getFormattedDate()
-      };
+      submitBtn.disabled = true;
+      submitBtn.textContent = "저장 중... ⏳";
 
-      const comments = getStoredComments();
-      comments.unshift(newComment); // 최신 댓글이 위에 오도록 추가
-      saveComments(comments);
-      renderComments();
+      try {
+        await addDoc(commentsCol, {
+          author: author,
+          content: content,
+          createdAt: serverTimestamp()
+        });
 
-      // 폼 초기화
-      contentInput.value = '';
-      showToast("💬 따뜻한 한마디가 등록되었습니다!");
-    });
-
-    // 댓글 삭제 함수
-    function deleteComment(id) {
-      if (confirm('이 댓글을 삭제하시겠습니까?')) {
-        let comments = getStoredComments();
-        comments = comments.filter(c => c.id !== id);
-        saveComments(comments);
-        renderComments();
-        showToast("댓글이 삭제되었습니다.");
+        contentInput.value = "";
+        showToast("💬 Firebase에 소중한 한마디가 등록되었습니다!");
+      } catch (err) {
+        console.error("댓글 등록 오류:", err);
+        showToast("⚠️ 등록 실패! Firestore가 생성되어 있는지 확인해주세요.");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "✏️ 댓글 남기기";
       }
-    }
-
-    // 초기 로드시 댓글 목록 렌더링
-    renderComments();
+    });
   </script>
 </body>
 </html>
